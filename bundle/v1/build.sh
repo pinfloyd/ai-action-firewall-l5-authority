@@ -20,6 +20,7 @@ tar \
   --sort=name \
   --mtime="$FIXED_MTIME" \
   --owner=0 --group=0 --numeric-owner \
+  --exclude="bundle/v1/ZENODO_BUNDLE_SHA256_EXPECTED.txt" \
   -cf "$TAR_TMP" \
   bundle/v1
 
