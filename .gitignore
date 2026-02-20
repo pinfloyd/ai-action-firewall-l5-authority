@@ -1,0 +1,17 @@
+# generated outputs
+/out/
+/**/out/
+
+# local volatile state/logs (do not track)
+**/admit.log
+**/state.json
+**/executor_state.json
+**/ACTION_PERFORMED.txt
+
+# python caches
+__pycache__/
+*.pyc
+
+# windows noise
+Thumbs.db
+.DS_Store

@@ -1,0 +1,41 @@
+name: Repro Bundle (deterministic)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "bundle/v1/**"
+      - ".github/workflows/repro.yml"
+
+jobs:
+  build-bundle:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build bundle tgz (PACKAGE_BUNDLE.ps1)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference="Stop"
+          pwsh -NoProfile -ExecutionPolicy Bypass -File "bundle/v1/PACKAGE_BUNDLE.ps1"
+          if(-not (Test-Path "out/ZENODO_BUNDLE.tar.gz")) { throw "MISSING out/ZENODO_BUNDLE.tar.gz" }
+          if(-not (Test-Path "out/ZENODO_BUNDLE_SHA256.txt")) { throw "MISSING out/ZENODO_BUNDLE_SHA256.txt" }
+
+      - name: Verify tgz sha256 matches expected
+        shell: pwsh
+        run: |
+          $ErrorActionPreference="Stop"
+          $got = (Get-Content -Raw "out/ZENODO_BUNDLE_SHA256.txt").Trim()
+          $exp = (Get-Content -Raw "bundle/v1/ZENODO_BUNDLE_SHA256_EXPECTED.txt").Trim()
+          "GOT=$got"
+          "EXP=$exp"
+          if($got -ne $exp) { throw "SHA256_MISMATCH" }
+
+      - name: Upload bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZENODO_BUNDLE
+          path: |
+            out/ZENODO_BUNDLE.tar.gz
+            out/ZENODO_BUNDLE_SHA256.txt

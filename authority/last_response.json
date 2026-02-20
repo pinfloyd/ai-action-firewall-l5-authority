@@ -1,0 +1,21 @@
+{
+  "signed_record": {
+    "intent": {
+      "action_type": "VERIFY_TEST",
+      "payload": {
+        "n": 123
+      }
+    },
+    "decision": "DENY",
+    "policy_version": "v1",
+    "authority_id": "ADMIT_AUTHORITY_V1",
+    "image_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp_utc": "2026-02-20T13:07:49Z",
+    "seq": 8,
+    "prev_hash": "246e84739e09fe8f200ef759aa974b659ce922b862a6f920b263083989d632a8",
+    "decision_hash": "1c3b0d845072e44208b526f6e0513a9b789c6e7c2fefc35bbb4fc299e52f8b9a",
+    "record_hash": "40b6183a18976d38855603aedf5f29ff96926f7768204f568e45e9e6b08c00a4",
+    "signature": "3lgPPYRMlK9C+LnMpuMbCBf9cul7hiRPuxoFxXameFpqaW0oJUAsvoUg252LNB9eJVoSy9O4dUSu1990sKrqCg=="
+  },
+  "ledger_new_hash": "ec40ab00065f43d28dfec9c0958943ab42522449a7c221cd6649730709c43f1c"
+}
