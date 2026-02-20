@@ -1,6 +1,6 @@
 $ErrorActionPreference="Stop"
 
-$ROOT   = "H:\AIActionFirewall_v1\level5_external_admit_authority"
+$ROOT = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $BUNDLE = Join-Path $ROOT "bundle\v1"
 $OUT    = Join-Path $ROOT "out"
 
