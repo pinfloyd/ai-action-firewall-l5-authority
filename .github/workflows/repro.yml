@@ -1,11 +1,9 @@
-name: Repro Bundle (deterministic)
+name: Repro Bundle (deterministic) + Remote Attestation
 
 on:
-  workflow_dispatch:
   push:
-    paths:
-      - "bundle/v1/**"
-      - ".github/workflows/repro.yml"
+    branches: [ "main" ]
+  workflow_dispatch: {}
 
 jobs:
   build-bundle:
@@ -15,26 +13,80 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build canonical bundle tgz (Linux deterministic)
+        shell: bash
         run: |
+          set -euo pipefail
           chmod +x bundle/v1/build.sh
-          bundle/v1/build.sh
+          ./bundle/v1/build.sh
 
       - name: Verify tgz sha256 matches expected
+        shell: bash
         run: |
-          set -e
-          got="$(cat out/ZENODO_BUNDLE_SHA256.txt | tr -d '\r')"
-          exp="$(cat bundle/v1/ZENODO_BUNDLE_SHA256_EXPECTED.txt | tr -d '\r')"
-          echo "GOT=$got"
-          echo "EXP=$exp"
-          if [ "$got" != "$exp" ]; then
-            echo "SHA256_MISMATCH"
-            exit 1
-          fi
+          set -euo pipefail
+          test -f out/ZENODO_BUNDLE.tar.gz
+          GOT="$(sha256sum out/ZENODO_BUNDLE.tar.gz | awk '{print $1}')"
+          EXP="$(tr -d ' \r\n\t' < bundle/v1/ZENODO_BUNDLE_SHA256_EXPECTED.txt)"
+          echo "GOT=$GOT"
+          echo "EXP=$EXP"
+          test "$GOT" = "$EXP"
+
+      - name: Remote attestation (VPS): pinned pubkey + pinned image_digest + signed admit verification
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          AUTH_URL="$(tr -d ' \r\n\t' < bundle/v1/AUTHORITY_URL.txt)"
+          echo "AUTH_URL=$AUTH_URL"
+
+          # 1) fetch pubkey JSON from VPS
+          curl -fsS "$AUTH_URL/pubkey" -o /tmp/pubkey.json
+
+          # 2) pin-check: public_key_sha256 must match repo file
+          EXP_PUB_SHA="$(tr -d ' \r\n\t' < bundle/v1/PUBLIC_KEY_SHA256.txt)"
+          GOT_PUB_SHA="$(python3 - <<'PY'
+import json
+d=json.load(open("/tmp/pubkey.json","r",encoding="utf-8"))
+print(d.get("public_key_sha256",""))
+PY
+)"
+          echo "PUBKEY_SHA256_GOT=$GOT_PUB_SHA"
+          echo "PUBKEY_SHA256_EXP=$EXP_PUB_SHA"
+          test "$GOT_PUB_SHA" = "$EXP_PUB_SHA"
+
+          PUB_B64="$(python3 - <<'PY'
+import json
+d=json.load(open("/tmp/pubkey.json","r",encoding="utf-8"))
+print(d.get("public_key_b64",""))
+PY
+)"
+          test -n "$PUB_B64"
+
+          # 3) call /admit on VPS using bundle intent
+          curl -fsS -X POST "$AUTH_URL/admit" \
+            -H "Content-Type: application/json" \
+            --data-binary @bundle/v1/intent.json \
+            -o /tmp/resp.json
+
+          # 4) pin-check: image_digest in signed_record must match repo file
+          EXP_IMG="$(tr -d ' \r\n\t' < bundle/v1/AUTHORITY_IMAGE_DIGEST.txt)"
+          GOT_IMG="$(python3 - <<'PY'
+import json
+d=json.load(open("/tmp/resp.json","r",encoding="utf-8"))
+rec=d.get("signed_record",{})
+print(rec.get("image_digest",""))
+PY
+)"
+          echo "IMAGE_DIGEST_GOT=$GOT_IMG"
+          echo "IMAGE_DIGEST_EXP=$EXP_IMG"
+          test "$GOT_IMG" = "$EXP_IMG"
+
+          # 5) crypto verify (ed25519 signature + hashes + ledger_new_hash integrity) using your verifier.py
+          python3 -m pip install --disable-pip-version-check --no-cache-dir cryptography==42.0.8
+          python3 bundle/v1/verifier.py /tmp/resp.json "$PUB_B64" | tee /tmp/verify.out
+          grep -q "VERIFY=OK" /tmp/verify.out
 
       - name: Upload bundle artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ZENODO_BUNDLE
-          path: |
-            out/ZENODO_BUNDLE.tar.gz
-            out/ZENODO_BUNDLE_SHA256.txt
+          name: ZENODO_BUNDLE.tar.gz
+          path: out/ZENODO_BUNDLE.tar.gz
