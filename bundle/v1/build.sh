@@ -2,33 +2,61 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-OUTDIR="$ROOT/out"
+BUNDLE="$ROOT/bundle/v1"
+OUT="$ROOT/out"
+TGZ="$OUT/ZENODO_BUNDLE.tar.gz"
+SHA="$OUT/ZENODO_BUNDLE_SHA256.txt"
 
-mkdir -p "$OUTDIR"
+mkdir -p "$OUT"
 
-FIXED_MTIME="2020-01-01 00:00:00Z"
+# Stable locale (defensive)
+export LC_ALL=C
 
-TAR_TMP="$OUTDIR/ZENODO_BUNDLE.tar"
-TGZ="$OUTDIR/ZENODO_BUNDLE.tar.gz"
-SHA="$OUTDIR/ZENODO_BUNDLE_SHA256.txt"
+cd "$BUNDLE"
 
-rm -f "$TAR_TMP" "$TGZ" "$SHA"
+# Explicit stable file list (relative to bundle/v1)
+# NOTE: do NOT include ZENODO_BUNDLE_SHA256_EXPECTED.txt (that is a target, not part of bundle).
+FILES=(
+  "ANCHORS_README.txt"
+  "AUTHORITY_ID.txt"
+  "AUTHORITY_IMAGE_DIGEST.txt"
+  "AUTHORITY_URL.txt"
+  "build.sh"
+  "executor_config.json"
+  "FETCH_VPS_ANCHORS.ps1"
+  "intent.json"
+  "last_executor_response.json"
+  "PACKAGE_BUNDLE.ps1"
+  "PUBLIC_KEY_B64.txt"
+  "PUBLIC_KEY_SHA256.txt"
+  "REPLAY_REPORT_SHA256.txt"
+  "REPLAY_REPORT.txt"
+  "SHA256SUMS.txt"
+  "signed_record.json"
+  "SPEC_SIGNED_ADMISSION_RECORD_V1.md"
+  "verifier_go.exe"
+  "verifier.py"
+  "anchors/ledger_root_20260220_14.txt"
+  "anchors/ledger_root_20260220_14.txt.ots"
+)
 
-cd "$ROOT"
+# Deterministic tar:
+# - fixed mtime/uid/gid/mode
+# - no xattrs/acls/selinux
+# - stable order by feeding explicit list
+# - gzip -n to remove timestamp
+rm -f "$TGZ" "$SHA"
 
-tar \
-  --sort=name \
-  --mtime="$FIXED_MTIME" \
-  --owner=0 --group=0 --numeric-owner \
-  --exclude="bundle/v1/ZENODO_BUNDLE_SHA256_EXPECTED.txt" \
-  -cf "$TAR_TMP" \
-  bundle/v1
+printf '%s\n' "${FILES[@]}" | tar \
+  --format=gnu \
+  --no-acls --no-xattrs --no-selinux \
+  --numeric-owner --owner=0 --group=0 \
+  --mode='u=rw,go=r' \
+  --mtime='@0' --clamp-mtime \
+  -cf - --files-from - | gzip -n > "$TGZ"
 
-gzip -n -9 -c "$TAR_TMP" > "$TGZ"
-rm -f "$TAR_TMP"
-
-sha256sum "$TGZ" | awk '{print $1"  ZENODO_BUNDLE.tar.gz"}' > "$SHA"
+# Write sha256 (hex only)
+sha256sum "$TGZ" | awk '{print $1}' > "$SHA"
 
 echo "TGZ=$TGZ"
-echo "SHA256_FILE=$SHA"
-cat "$SHA"
+echo "TGZ_SHA256=$(cat "$SHA")"
